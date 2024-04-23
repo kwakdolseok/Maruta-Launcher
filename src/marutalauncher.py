@@ -35,7 +35,7 @@ class MarutaLauncher:
             self.executable_file = "steamcmd.sh"
             
         else:
-            raise Exception('지원하지 않는 운영체제입니다. Linux 또는 Windows만 지원됩니다.')
+            raise Exception('Linux 또는 Windows만 지원됩니다.')
 
     def check_file(self):
         if not self.steamapps_id:

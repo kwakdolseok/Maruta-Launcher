@@ -54,8 +54,8 @@ class SteamCMD:
                 print(f"Error: Source file '{src}' does not exist. Symbolic link was not created.")
 
     def download(self):
-        executable_path = os.path.join(self.steam_path, self.executable_file)
-        if os.path.exists(executable_path):
+        steam_path = os.path.join(self.steam_path, self.executable_file)
+        if os.path.exists(steam_path):
             i18n.log('steamcmd_installed', level="Warning")
             return
         
@@ -80,6 +80,10 @@ class SteamCMD:
 
 
     def install(self):
+        executable_path = os.path.join(self.server_path, "steamapps", f"appmanifest_{self.steamapps_id}.acf")
+        if os.path.exists(executable_path):
+            i18n.log('game_installed', level="Warning", game=os.getenv("SERVICE_NAME"))
+            return
         steamcmd = f"+force_install_dir \"{self.server_path}\" +login anonymous +app_update {self.steamapps_id} validate +quit"
         if self.platform == "Windows":
             command = f'cd "{self.steam_path}"; & ".\\{self.executable_file}" {steamcmd}'
@@ -88,8 +92,8 @@ class SteamCMD:
             command = f'cd "{self.steam_path}" && ./{self.executable_file} {steamcmd}'
             try:
                 subprocess.check_call(command, shell=True)  
-            except subprocess.CalledProcessError as e:
-                print("Failed to install game via SteamCMD:", e)  
+            except subprocess.CalledProcessError as e: 
+                i18n.log("error", level="error", error=str(e))
 
 
 st = SteamCMD()

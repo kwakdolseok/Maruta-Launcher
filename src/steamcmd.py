@@ -4,29 +4,31 @@ import platform
 import urllib.request
 import tarfile
 import zipfile
+from i18n import I18N
+
+i18n = I18N()
 
 class SteamCMD:
+
     def __init__(self):
+        self.steamapps_id = os.getenv("APPID")
+        self.service_name = os.getenv("SERVICE_NAME")
+        self.serverfile = os.getenv("SERVER_FILE")
         self.platform = platform.system()
+
         if self.platform == "Windows":
+            self.install_drive = os.getenv("INSTALL_DRIVE", "C:\\")
+            self.steam_path = os.path.join(self.install_drive, "marutalauncher", "steamcmd")
+            self.server_path = os.path.join(self.install_drive, "marutalauncher")
             self.steam_url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
-            self.default_path = os.path.join("C:\\", "marutalauncher")
             self.executable_file = "steamcmd.exe"
+            
         elif self.platform == "Linux":
             user_home = os.path.expanduser('~')
-            self.default_path = os.path.join(user_home, "marutalauncher")
+            self.steam_path = os.path.join(user_home, "marutalauncher", "steamcmd")
+            self.server_path = os.path.join(user_home, "marutalauncher")
             self.steam_url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
             self.executable_file = "steamcmd.sh"
-        else:
-            raise Exception('Unsupported OS. Only Linux or Windows is supported.')
-        self.steam_path = self.default_path
-        self.server_path = self.default_path
-
-    def setup_linux_environment(self):
-        subprocess.call(['sudo', 'dpkg', '--add-architecture', 'i386'])
-        subprocess.call(['sudo', 'apt-get', 'update'])
-        subprocess.call(['sudo', 'apt-get', 'install', '-y', 'lib32gcc-s1'])
-
 
     def create_symbolic_links(self):
         user_home = os.path.expanduser('~')
@@ -51,53 +53,45 @@ class SteamCMD:
             else:
                 print(f"Error: Source file '{src}' does not exist. Symbolic link was not created.")
 
-    def install(self, install_path=None):
-        if install_path:
-            self.steam_path = install_path
-            self.server_path = install_path
-        else:
-            self.steam_path = self.default_path
-            self.server_path = self.default_path
-
+    def download(self):
         executable_path = os.path.join(self.steam_path, self.executable_file)
         if os.path.exists(executable_path):
-            print("SteamCMD is already installed.")
+            i18n.log('steamcmd_installed', level="Warning")
             return
-
+        
         os.makedirs(self.steam_path, exist_ok=True)
 
         file_path = os.path.join(self.steam_path, os.path.basename(self.steam_url))
         if not os.path.exists(file_path):
-            print("Downloading SteamCMD...")
             urllib.request.urlretrieve(self.steam_url, file_path)
-        else:
-            print("SteamCMD installer already downloaded.")
 
         if self.platform == "Windows":
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                print("Extracting SteamCMD...")
                 zip_ref.extractall(self.steam_path)
-            command = f'cd "{self.steam_path}"; & ".\\{self.executable_file}" +quit'
+            command = f'cd "{self.steam_path}"; & ".\\{self.executable_file}" validate +quit'
             subprocess.call(["powershell.exe", "-Command", command], shell=True)
         elif self.platform == "Linux":
             with tarfile.open(file_path, "r:gz") as tar:
-                print("Extracting SteamCMD...")
                 tar.extractall(self.steam_path)
-            command = f'cd "{self.steam_path}"; chmod +x ./{self.executable_file}; ./{self.executable_file} +quit'
+            command = f'cd "{self.steam_path}"; chmod +x ./{self.executable_file}; ./{self.executable_file} validate +quit'
             subprocess.call(command, shell=True)
-
+            self.create_symbolic_links()
         os.remove(file_path)
-        print("Installation complete.")
-        
-    def update(self, *, app_id, install_dir):
-        steamcmd = f"+force_install_dir {install_dir} +login anonymous +app_update {str(app_id)} validate +quit"
-        if self.platform == "Windows":
-            command = ['powershell.exe', '-Command', f'cd "{self.steam_path}"; & ".\\{self.executable_file}" {steamcmd}']
-        elif self.platform == "Linux":
-            command = ['bash', '-c', f'cd "{self.steam_path}"; ./{self.executable_file} {steamcmd}']
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode != 0:
-            print("오류 발생:", result.stderr)
-        else:
-            print("업데이트 성공적으로 완료됨:", result.stdout)
 
+
+    def install(self):
+        steamcmd = f"+force_install_dir \"{self.server_path}\" +login anonymous +app_update {self.steamapps_id} validate +quit"
+        if self.platform == "Windows":
+            command = f'cd "{self.steam_path}"; & ".\\{self.executable_file}" {steamcmd}'
+            subprocess.call(["powershell.exe", "-Command", command], shell=True)
+        elif self.platform == "Linux":
+            command = f'cd "{self.steam_path}" && ./{self.executable_file} {steamcmd}'
+            try:
+                subprocess.check_call(command, shell=True)  
+            except subprocess.CalledProcessError as e:
+                print("Failed to install game via SteamCMD:", e)  
+
+
+st = SteamCMD()
+st.download()
+st.install()

@@ -4,7 +4,6 @@ import psutil
 import subprocess
 from dotenv import load_dotenv, find_dotenv
 from steamcmd import SteamCMD
-import threading
 
 
 dotenv_file = find_dotenv()
@@ -18,10 +17,11 @@ steamcmd = SteamCMD()
 class MarutaLauncher:
     def __init__(self):
         self.steamapps_id = os.getenv("APPID")
-        self.platform = platform.system()
         self.service_name = os.getenv("SERVICE_NAME")
-        self.serverfile = os.getenv("SERVER_FIEL")
+        self.serverfile = os.getenv("SERVER_FILE")
         self.running_process = None  
+        self.platform = platform.system()
+
         if self.platform == "Windows":
             self.install_drive = os.getenv("INSTALL_DRIVE", "C:\\")
             self.steam_path = os.path.join(self.install_drive, "marutalauncher", "steamcmd")
@@ -59,28 +59,29 @@ class MarutaLauncher:
             return
 
         log_file_path = os.path.join(self.server_path, 'game_engine.log')
-        with open(log_file_path, 'a') as log_file: 
+        with open(log_file_path, 'a') as log_file:
             executable_file = f"{self.serverfile}" + (".exe" if self.platform == "Windows" else ".sh")
 
             if self.platform == "Windows":
-                command = f'cd "{self.server_path}" ; & ".\\{executable_file}"  {os.getenv("OPTIONS")}'
+                command = f'cmd /c "cd /d "{self.server_path}" && "{executable_file}" {os.getenv("OPTIONS") or ""}"'
                 self.running_process = subprocess.Popen(
-                    ["powershell.exe", "-Command", command ], 
+                    command,
                     shell=True,
-                    stdout=log_file, 
+                    stdout=log_file,
                     stderr=subprocess.STDOUT
                 )
 
             elif self.platform == "Linux":
-                command = f'cd "{self.server_path}"; ./"{executable_file}"  {os.getenv("OPTIONS")}'
+                command = f'cd "{self.server_path}"; ./"{executable_file}" {os.getenv("OPTIONS")}'
                 self.running_process = subprocess.Popen(
-                    command, 
-                    shell=True, 
-                    stdout=log_file, 
+                    command,
+                    shell=True,
+                    stdout=log_file,
                     stderr=subprocess.STDOUT
                 )
 
             print(f"[마루타 구동기] {self.service_name} 게임엔진을 실행 완료했습니다")
+
 
     def check_process(self):
         for process in psutil.process_iter(['pid', 'name']):

@@ -4,7 +4,10 @@ import platform
 import urllib.request
 import tarfile
 import zipfile
+import requests
 from i18n import I18N
+from xml.etree import ElementTree as ET
+
 
 i18n = I18N()
 
@@ -96,6 +99,48 @@ class SteamCMD:
                 i18n.log("error", level="error", error=str(e))
 
 
-st = SteamCMD()
-st.download()
-st.install()
+    def update(self):
+        appmanifest_path = os.path.join(self.server_path, "steamapps", f"appmanifest_{self.steamapps_id}.acf")
+        if not os.path.exists(appmanifest_path):
+            i18n.log("file_not_found", level="Warning" , file=appmanifest_path)
+            return
+
+        local_build_id = None
+        try:
+            with open(appmanifest_path, 'r') as file:
+                for line in file:
+                    if 'buildid' in line.strip():
+                        local_build_id = line.split('"')[3]
+                        break
+        except Exception as e:
+            i18n.log('reading_file', level="error",error={str(e)})
+            return
+
+        if local_build_id is None:
+            i18n.log("not_build",level="Warning",id=self.steamapps_id)
+            return
+
+        try:
+            response = requests.get(f'https://steamdb.info/api/PatchnotesRSS/?appid={self.steamapps_id}')
+            if response.status_code != 200:
+                i18n.log('steamdb_data', level='Warning', stastatus_code=response.status_code)
+                return
+
+            root = ET.fromstring(response.content)
+            latest_build_id = root.find('.//item/guid').text.split('#')[-1]
+        except ET.ParseError as e:
+            print(f"XML 파싱 오류: {e}")
+            return
+
+        if local_build_id != latest_build_id:
+            steamcmd = f"+force_install_dir \"{self.server_path}\" +login anonymous +app_update {self.steamapps_id} validate +quit"
+            if self.platform == "Windows":
+                command = f'cd "{self.steam_path}"; & ".\\{self.executable_file}" {steamcmd}'
+                subprocess.call(["powershell.exe", "-Command", command], shell=True)
+            elif self.platform == "Linux":
+                command = f'cd "{self.steam_path}" && ./{self.executable_file} {steamcmd}'
+                try:
+                    subprocess.check_call(command, shell=True)  
+                except subprocess.CalledProcessError as e:
+                    i18n.log("error", level="error", error=str(e))
+            print(f"BUILD_ID를 {latest_build_id}(으)로 업데이트했습니다.")
